@@ -1,0 +1,48 @@
+version: "3.2"
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: 'rabbitmq'
+    ports:
+        - 5672:5672
+        - 15672:15672
+    networks:
+        - sse-wss-polling-network
+  mongo1:
+    hostname: mongo1
+    image: mongo
+    expose:
+      - 27017
+    command: --replSet my-test --bind_ip_all
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo --quiet) -eq 1
+      interval: 10s
+    networks:
+      - sse-wss-polling-network
+    
+  mongo2:
+    hostname: mongo2
+    image: mongo
+    expose:
+      - 27017
+    command: --replSet my-test --bind_ip_all
+    ports:
+      - "27018:27017"
+    networks:
+      - sse-wss-polling-network
+  mongo3:
+      hostname: mongo3
+      image: mongo
+      expose:
+        - 27017
+      command: --replSet my-test --bind_ip_all
+      ports:
+        - "27019:27017"
+      networks:
+        - sse-wss-polling-network
+
+networks:
+  sse-wss-polling-network:
+    driver: bridge
