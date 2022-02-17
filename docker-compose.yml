@@ -2,7 +2,7 @@ version: "3.2"
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    container_name: 'rabbitmq'
+    container_name: rabbitmq
     ports:
         - 5672:5672
         - 15672:15672
@@ -10,39 +10,108 @@ services:
         - sse-wss-polling-network
   mongo1:
     hostname: mongo1
+    container_name: mongo1
     image: mongo
     expose:
       - 27017
     command: --replSet my-test --bind_ip_all
     ports:
-      - "27017:27017"
+      - 27017:27017
     healthcheck:
       test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo --quiet) -eq 1
       interval: 10s
     networks:
       - sse-wss-polling-network
-    
   mongo2:
     hostname: mongo2
+    container_name: mongo2
     image: mongo
     expose:
       - 27017
     command: --replSet my-test --bind_ip_all
     ports:
-      - "27018:27017"
+      - 27018:27017
     networks:
       - sse-wss-polling-network
   mongo3:
       hostname: mongo3
+      container_name: mongo3
       image: mongo
       expose:
         - 27017
       command: --replSet my-test --bind_ip_all
       ports:
-        - "27019:27017"
+        - 27019:27017
       networks:
         - sse-wss-polling-network
-
+  mongodb-exporter:
+      image: docker.io/bitnami/mongodb-exporter
+      container_name: mongodb-exporter
+      command: '--mongodb.direct-connect=false'
+      environment:
+          MONGODB_URI:  'mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=my-test'
+      ports:
+        - 9216:9216
+      networks:
+        - sse-wss-polling-network
+      depends_on:
+        - mongo1
+        - mongo2
+        - mongo3
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: unless-stopped
+    ports:
+      - 9100:9100
+    networks:
+      - sse-wss-polling-network
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - 8080:8080
+    networks:
+      - sse-wss-polling-network
+  grafana:
+    image: grafana/grafana-enterprise:8.2.0
+    container_name: grafana
+    ports:
+      - 3000:3000
+    user: '472'
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./grafana/config.monitoring
+    networks:
+      - sse-wss-polling-network
+    depends_on:
+      - prometheus
+  prometheus:
+      image: prom/prometheus
+      container_name: prometheus
+      volumes:
+        - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+        - ./prometheus/alert.rules:/etc/prometheus/alert.rules
+      ports:
+        - 9090:9090
+      networks:
+        - sse-wss-polling-network
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - 9093:9093
+    networks:
+      - sse-wss-polling-network
 networks:
   sse-wss-polling-network:
     driver: bridge

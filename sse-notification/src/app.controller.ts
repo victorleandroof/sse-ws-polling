@@ -41,7 +41,7 @@ export class AppController {
     return map((eventChange: any) => {
        if(this.isChangeOwner(eventChange, orderId)) {
         const messageEvent: MessageEvent = {
-          data: { ... eventChange.updateDescription.updatedFields, },
+          data: { ... eventChange.updateDescription.updatedFields, orderId },
         };
         return messageEvent;
        }

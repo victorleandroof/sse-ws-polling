@@ -63,50 +63,55 @@
   const sseResults = {};
   const pollingResults = {};
   const startOrder = () => {
-    for (let i = 1; i <= 10; i++) {
-      $.getJSON(`http://localhost:3001?id=${i}`, (data) => {
+    for (i = 1; i <= 10; i++) {
+      $.getJSON(`http://localhost:3001/order?id=${i}`, (data) => {
         const requestTime = performance.now();
-        wssResults[i] = {
+        wssResults[data.orderId] = {
           requestTime,
         }
-        sseResults[i] = {
+        sseResults[data.orderId] = {
           requestTime,
         }
-        pollingResults[i] = {
+        pollingResults[data.orderId] = {
           requestTime,
         }
-      }).fail(err => {
-        console.log('err', i);
-      })
+      });
     }
   }
   const startWss = () => {
     const socket = io('ws://localhost:8080');
-    for (let i = 1; i <= 10; i++) {
-      socket.connect('connect', () => {
-        socket.emit('events', {
-          orderId
-        })
+    for (i = 1; i <= 10; i++) {
+      socket.emit('events', {
+          orderId:i
       })
     }
     socket.on('payment.notification', (data) => {
-      const wssResult = wssResults[data.orderId];
-      if (wssResult) {
-        wssResult.responseTime = performance.now();
-        const timeResult = $(`#wss${data.orderId}`).append(`${wssResult.requestTime - wssResult.responseTime} ms`)
+      if(data.status) {
+        const wssResult = wssResults[data.orderId];
+        if (wssResult) {
+          wssResult.responseTime = performance.now();
+          const timeResult = $(`#wss${data.orderId}`).append(`${wssResult.responseTime - wssResult.requestTime} ms`)
+        } else {
+          $(`#wss${data.orderId}`).append('failed');
+        }
       }
-      $(`#wss${data.orderId}`).append('failed');
     })
   }
 
   const startSse = () => {
-    for (let i = 1; i <= 10; i++) {
+    for (i = 1; i <= 10; i++) {
       const evtSource = new EventSource(`http://localhost:3003/payment/status/${i}`);
       evtSource.onmessage = (event) => {
-        const sseResult = sseResults[data.orderId];
-        if (sseResult) {
-          sseResult.responseTime = performance.now();
-          const timeResult = $(`#sse${data.orderId}`).append(`${sseResult.requestTime - sseResult.responseTime} ms`)
+        const data = JSON.parse(event.data);
+        if (data.status) {
+          const sseResult = sseResults[data.orderId];
+          if (sseResult) {
+            sseResult.responseTime = performance.now();
+            const timeResult = $(`#sse${data.orderId}`).append(
+              `${sseResult.responseTime - sseResult.requestTime} ms`)
+          } else {
+            $(`#sse${data.orderId}`).append('failed');
+          }
         }
       }
     }

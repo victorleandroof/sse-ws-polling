@@ -1,5 +1,6 @@
 import { Controller, OnModuleInit } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
+import { clearInterval } from 'timers';
 import { MongoProvider } from './mongo.provider';
 import { RabbitMQProvider } from './rabbitmq.provider';
 
@@ -14,7 +15,10 @@ export class PaymentCheckController implements OnModuleInit {
     const rabbitMqProvider = await this.rabbitMqProvider.getInstance();
     rabbitMqProvider.consume('payment.start', async (message) => {
       console.log('checkPayment.received');
-      this.checkPayment(message);
+      let interval = setTimeout(() => {
+        this.checkPayment(message);
+        clearInterval(interval);
+      }, this.getRandomInt(10000,40000));
       rabbitMqProvider.ack(message);
     });
   }
@@ -36,14 +40,20 @@ export class PaymentCheckController implements OnModuleInit {
       }),
     );
     const rabbitMqProvider = await this.rabbitMqProvider.getInstance();
-    rabbitMqProvider.assertExchange('payment.notification', 'fanout', {
+    await rabbitMqProvider.assertExchange('payment.notification.exchange', 'fanout', {
       durable: false,
     });
     const resultSend = rabbitMqProvider.publish(
-      'payment.notification',
+      'payment.notification.exchange',
       '',
       message,
     );
     console.log('checkPayment.sendNotification', resultSend);
+  }
+
+  private getRandomInt(min:number, max:number): number {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min;
   }
 }
