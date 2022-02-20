@@ -1,11 +1,41 @@
 version: "3.2"
 services:
+  client:
+    image: nginx
+    ports:
+      - 8000:8000
+    volumes:
+      - ./public/:/usr/share/nginx/html
+    environment:
+      NGINX_PORT: 8000
+  traefik:
+    image: "traefik:v2.6"
+    container_name: "traefik"
+    command:
+      - --api.dashboard
+      - --providers.docker=true
+    labels:
+      - traefik.http.routers.traefik.rule=Host(`localhost`)
+      - traefik.http.routers.traefik.service=api@internal
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     ports:
         - 5672:5672
         - 15672:15672
+        - 15692:15692
+    volumes:
+      - ./rabbitmq/:/etc/rabbitmq/
+    healthcheck:
+        test: rabbitmq-diagnostics -q ping
+        interval: 30s
+        timeout: 30s
+        retries: 3
     networks:
         - sse-wss-polling-network
   mongo1:
@@ -76,7 +106,9 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     ports:
-      - 8080:8080
+      - 8098:8098
+    command:
+      - '-port=8098'
     networks:
       - sse-wss-polling-network
   grafana:
@@ -112,6 +144,66 @@ services:
       - 9093:9093
     networks:
       - sse-wss-polling-network
+  order-ms:
+    build: ./order-ms
+    container_name: order-ms
+    ports: 
+      - 3001:3001
+    depends_on:
+        mongo1:
+          condition: service_healthy
+        rabbitmq:
+          condition: service_healthy
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      MONGODB_URL: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=my-test
+      PORT: 3001
+    labels:
+      - traefik.http.routers.order-ms.rule=Host(`localhost`) && Path(`/order-ms`)
+      - traefik.http.services.service.loadbalancer.server.port=3001
+    networks:
+        - sse-wss-polling-network
+  polling-notification:
+    build: ./polling-notification
+    container_name: polling-notification
+    ports: 
+      - 3002:3002
+    depends_on:
+        mongo1:
+          condition: service_healthy
+    environment:
+      MONGODB_URL: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=my-test
+      PORT: 3002
+    networks:
+        - sse-wss-polling-network
+  sse-notification:
+    build: ./sse-notification
+    container_name: sse-notification
+    ports: 
+      - 3003:3003
+    depends_on:
+        mongo1:
+          condition: service_healthy
+    environment:
+      MONGODB_URL: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=my-test
+      PORT: 3003
+    networks:
+        - sse-wss-polling-network
+  wss-notification:
+    build: ./wss-notification
+    container_name: wss-notification
+    ports: 
+      - 3004:3004
+      - 8090:8090
+    depends_on:
+        rabbitmq:
+          condition: service_healthy
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      PORT: 3004
+      WSS_PORT: 8090
+    networks:
+        - sse-wss-polling-network
 networks:
   sse-wss-polling-network:
     driver: bridge

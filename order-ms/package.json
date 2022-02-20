@@ -25,9 +25,11 @@
     "@nestjs/core": "^8.0.0",
     "@nestjs/microservices": "^8.2.6",
     "@nestjs/platform-express": "^8.0.0",
+    "@willsoto/nestjs-prometheus": "^4.4.0",
     "amqplib": "^0.8.0",
     "dotenv": "^16.0.0",
     "mongodb": "^4.3.1",
+    "prom-client": "^14.0.1",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0"
